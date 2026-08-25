@@ -1,0 +1,7 @@
+# The dsh-long-term-memory bundle patch: one plugin row registering the
+# long-term memory toolset. Applied after dsh-base and dsh-web-app bundles when
+# a profile lists this bundle; the user's own cordis.patch.yml can still
+# override the row by id.
+- insert:
+    - id: long-term-memory
+      name: dsh-long-term-memory

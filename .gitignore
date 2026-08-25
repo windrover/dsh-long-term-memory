@@ -1,0 +1,15 @@
+# Node
+node_modules/
+
+# DSH / runtime artifacts
+.dsh/
+*.jsonl
+*.jsonl.bak.*
+
+# macOS
+.DS_Store
+
+# Editors
+*.swp
+.idea/
+.vscode/
