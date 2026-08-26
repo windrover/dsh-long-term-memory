@@ -94,6 +94,14 @@ dsh plugin --profile web add "file:$(pwd)"
     injectContext: recent
     # 写入内容是否做威胁扫描（默认 true）
     scanThreatsOnWrite: true
+    # 自动总结：每轮对话结束后用 LLM 蒸馏值得长期记住的事实（默认 false，每次是辅助模型调用）
+    autoSummarize: false
+    # 两次自动总结间的最小间隔（ms，默认 30000，防抖）
+    summarizeIntervalMs: 30000
+    # 至少产生多少条新用户消息才触发总结（默认 1）
+    summarizeMinMessages: 1
+    # 超限时用 LLM 精炼压缩（默认 false = 纯规则压缩：淘汰最冷 + 合并子串重复）
+    compressWithLLM: false
     # 用户画像文件（默认 $DSH_HOME/dsh-memory/user.jsonl）
     userFile: null
     # 全局记忆文件（默认 $DSH_HOME/dsh-memory/global.jsonl）
@@ -106,9 +114,36 @@ dsh plugin --profile web add "file:$(pwd)"
     maxInjectedChars: 2400
     # 工具 limit 的上限（默认 25）
     maxResults: 25
-    # 每库字符预算；超限的写入被拒绝并要求先删后加（默认 20000）
+    # 每库字符预算；超限时先自动压缩（规则或 LLM），仍超才拒绝（默认 20000）
     charLimit: 20000
 ```
+
+## 自动总结与自动压缩
+
+除了模型主动写入，插件提供两级自动化（默认关闭，需在配置或 `settings.yaml` 开启）：
+
+- **自动总结**（`autoSummarize: true`）：每轮对话结束（`agent/status → idle`）时，在空闲期用 LLM 蒸馏本轮新增的对话，提取值得长期记住的事实写入记忆（威胁内容跳过、去重、超限自动压缩）。`settings.yaml` 可热重载开关：
+  ```yaml
+  long-term-memory:
+    autoSummarize: true
+    compressWithLLM: true
+  ```
+- **自动压缩**：`memory_write` 超限时先尝试压缩腾空间再拒绝：
+  - `compressWithLLM: false`（默认）：纯规则——按 `hits` 从低到高淘汰最冷条目 + 合并子串重复内容，零成本确定性；
+  - `compressWithLLM: true`：先用 LLM 精炼整个 store（合并重叠、去陈旧），失败回退规则压缩。
+  - 压缩只有真正腾出空间才落盘——无法压缩时报错且不误删旧条目。
+
+## 宿主 API（供未来 Web 记忆管理界面调用）
+
+web profile 下注册以下路由（JSON，供界面层使用）：
+
+| 路由 | 方法 | 说明 |
+|---|---|---|
+| `/api/memory/list?scope=` | GET | 列出各作用域记忆 |
+| `/api/memory/search?q=&scope=` | GET | BM25 检索 |
+| `/api/memory/get?id=` | GET | 单条记忆 |
+| `/api/memory/delete?id=` | GET | 删除单条 |
+| `/api/memory/settings` | GET | 当前开关状态（autoSummarize/compressWithLLM 等） |
 
 ## 测试
 
@@ -122,7 +157,9 @@ node test/unit.test.mjs
 
 - `lib/store.js` — 纯后端：CJK tokenizer、BM25、JSONL 原子持久化、跨进程锁、漂移/不可读防护、字符预算。
 - `lib/threats.js` — 轻量威胁模式扫描（写入拒绝 + 注入占位符）。
-- `lib/index.js` — 插件主体：注册 4 个工具、三档动态上下文注入、可选审批门。
+- `lib/automation.js` — 自动总结/压缩的纯逻辑：回合文本提取、LLM JSON 解析、规则压缩器。
+- `lib/llm.js` — 一发一收的辅助 LLM 调用封装（继承 agent 的 provider/model）。
+- `lib/index.js` — 插件主体：注册工具、三档动态上下文注入、自动总结钩子、压缩接入、设置 namespace、宿主 API。
 - `cordis.patch.yml` — bundle patch（插入一行 `long-term-memory`）。
 - `package.json` — bundle manifest（`dsh.bundle.patch`）。
 - `lib/types/` — `index.d.ts`（插件）+ `store.d.ts`（store 模块）类型声明。
