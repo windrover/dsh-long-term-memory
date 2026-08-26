@@ -195,3 +195,13 @@ node test/unit.test.mjs
 | `memory_write`（锁 + 原子写 + 威胁扫描） | ~2 ms | 低频 |
 | `memory_recall`（BM25 + 内存 touch） | ~0.3 ms | 修复前 ~11 ms（touch 曾全文件重写） |
 | 威胁扫描（11 模式） | ~0.7 µs | 可忽略 |
+
+## Roadmap
+
+- [x] 基础记忆：三作用域 + BM25 召回 + JSONL 存储
+- [x] 导出/导入、批量操作、/memory 命令
+- [x] 威胁扫描、写入护栏、自动总结、LLM 压缩
+- [x] Web 管理界面（记忆面板 + 设置卡片）
+- [ ] 多标签右侧栏容器（details-tabs：记忆/产物/终端/文件浏览）
+- [ ] 记忆导出到云盘/剪贴板格式选择
+- [ ] 标签过滤注入（recent 模式按 tag 过滤）
