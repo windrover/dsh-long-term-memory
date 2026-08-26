@@ -14,7 +14,7 @@
 | **记忆沉淀** | 模型用 `memory_write` 把值得长期保存的事实写入存储。 |
 | **确定性召回** | `memory_recall` 用 CJK 感知的 BM25 检索（中/日/韩按汉字 bigram 匹配，英文按单词），结果可解释、可重放。 |
 | **每轮自动注入** | 每次组装 request 前，通过 `systemPrompt.context()` 注入记忆摘要（同步渲染，不破坏 prefix cache）。 |
-| **注入三档** | `recent`（默认，每库最近几条）/ `full`（全部，受字符预算，Hermes 式快照）/ `off`。 |
+| **注入三档** | `recent`（默认，每库最近几条）/ `full`（全部，受字符预算，快照式注入）/ `off`。 |
 | **威胁扫描** | 写入内容与注入快照都做轻量威胁模式检测：命中则写入拒绝、注入替换为 `[BLOCKED: …]` 占位符。 |
 | **写入审批门** | 可选：`memory_write` / `memory_forget` 先走 `tools/pre-execute` 的 `ask` 决策，由 DSH 审批接缝裁决。 |
 | **写入护栏** | 跨进程文件锁 + 原子写；外部漂移检测（备份并拒绝，不静默丢数据）；文件不可读拒绝覆写；每库字符预算，超限要求先删后加。 |
@@ -30,6 +30,7 @@
 | `memory_forget(id, scope?)` | 按 id 删除记忆（不指定 scope 时按 user→global→workspace 顺序查）。 |
 | `memory_export(scope?, format?)` | 导出为可移植 bundle（JSON v1 可往返导入，或人类可读 Markdown）；只带 content/scope/tags。 |
 | `memory_import(bundle, scope?)` | 从 v1 JSON bundle 恢复记录；可按 content 去重跳过；可强制归入指定 scope。 |
+| `memory_batch(scope, operations)` | 单 scope 原子批量：add/replace/remove 一次落盘；预算按最终态检查（可先删后加）；重复/缺失/多匹配计数返回。 |
 
 ## 存储
 
@@ -121,13 +122,6 @@ node test/unit.test.mjs
 - **写入门可关闭**：默认 `requireApprovalForWrite: false`，开箱即用；需要审计/人工确认时开启。
 - **威胁扫描保守**：模式刻意收窄（指令覆盖/系统提示泄露/角色劫持/标记注入），避免把正常笔记误伤；注入快照用占位符而非删条，原文保留供用户处理。
 - **无 Web 面板**：v1 只做模型工具 + 注入；浏览用 `memory_list`，不引入客户端 bundle。
-
-## 已知取舍（相对 Hermes）
-
-- 注入的是**按 recency 排序的有界子集**（`recent` 模式）或预算内全量（`full` 模式），而非 Hermes 那种固定 2200/1375 字符的硬上限双库——DSH 插件用 `charLimit` 预算 + `full` 模式可逼近该行为。
-- 威胁扫描是**轻量正则集**（11 组：指令覆盖/系统提示泄露/角色劫持/越狱 DAN/developer mode/repeat-above/凭据外发 + 中文变体/标记注入），不是 Hermes 的完整 `threat_patterns.py` 库；覆盖率稍低但零依赖、实测误报为 0。
-- 漂移检测以「坏行」为信号；Hermes 还做 § 往返校验与单条超限检测。DSH 的 JSONL 格式下坏行是最主要的漂移来源。
-- `touch`（recall 命中计数）是**内存级**的，仅在下次真实写（put/delete）时随文件落盘；进程在两次写之间退出会丢失未落盘的计数增量——对"召回热度"这类信号无实质影响。
 
 ## 实测基准（本机 macOS / Node 22，真实 defineTool + 真实 store）
 
