@@ -67,6 +67,20 @@ dsh plugin --profile web add "file:$(pwd)"
 
 模型默认会看到**每轮注入的记忆摘要**（user 优先），因此不一定要先召回；相关任务开始时建议显式 `memory_recall` 以便拿到带分数的相关命中和 `id`。
 
+## 斜杠命令（用户面，不经模型）
+
+重启后可直接在输入框使用 `/memory`：
+
+| 命令 | 作用 |
+|---|---|
+| `/memory list [user\|global\|workspace\|all]` | 列出近期记忆（默认 all，user 优先） |
+| `/memory search <query>` | BM25 检索全部作用域 |
+| `/memory get <id>` | 查看单条记忆 |
+| `/memory forget <id>` | 删除单条记忆 |
+| `/memory export [json\|markdown]` | 导出可移植 bundle |
+
+适合不想经过模型直接管理记忆的场景（如清理过期条目、导出备份）。
+
 ## 配置
 
 在 profile 的 `cordis.patch.yml` 覆盖（`dsh.profile.bundles` 装载后应用）：
