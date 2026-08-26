@@ -47,12 +47,27 @@ export interface LongTermMemoryConfig {
   /**
    * How memory is injected into each request: 'recent' (default; bounded
    * digest of the newest entries per scope), 'full' (all entries, capped by
-   * maxInjectedChars, Hermes-style snapshot), or 'off'. Legacy booleans are
+   * maxInjectedChars, snapshot-style), or 'off'. Legacy booleans are
    * accepted: true → 'recent', false → 'off'.
    */
   readonly injectContext?: InjectContextMode | boolean
   /** Whether to refuse memory_write content that matches a threat pattern (default true). */
   readonly scanThreatsOnWrite?: boolean
+  /**
+   * Automatically distill durable facts from each finished conversation turn
+   * (agent/status idle → runMaintenance → LLM extraction). Default off: each
+   * run is an auxiliary model call.
+   */
+  readonly autoSummarize?: boolean
+  /** Minimum elapsed time between auto-summarize runs per agent (ms). */
+  readonly summarizeIntervalMs?: number
+  /** Only summarize a turn that produced at least this many new user messages. */
+  readonly summarizeMinMessages?: number
+  /**
+   * Compress with the LLM when a write would exceed the char budget; when
+   * off, deterministic rule-based compression is used. Default off.
+   */
+  readonly compressWithLLM?: boolean
   /** Absolute file for the user-profile scope (default $DSH_HOME/dsh-memory/user.jsonl). */
   readonly userFile?: string
   /** Absolute file for the global scope (default $DSH_HOME/dsh-memory/global.jsonl). */
@@ -65,7 +80,7 @@ export interface LongTermMemoryConfig {
   readonly maxInjectedChars?: number
   /** Enforce tool `limit` values ≤ this cap. */
   readonly maxResults?: number
-  /** Per-store character budget; a write exceeding it is refused with usage/limit. */
+  /** Per-store character budget; a write exceeding it triggers auto-compression. */
   readonly charLimit?: number
 }
 
