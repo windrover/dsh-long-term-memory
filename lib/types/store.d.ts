@@ -53,6 +53,39 @@ export declare function exportBundle(records: readonly MemoryRecord[], format?: 
 /** Parse a v1 JSON export bundle into normalized records; throws on malformed input. */
 export declare function parseExportBundle(text: string): MemoryRecord[]
 
+/** One batch operation for {@link MemoryStore.applyBatch}. */
+export interface BatchOperation {
+  readonly action: 'add' | 'replace' | 'remove'
+  /** New content for add/replace. */
+  readonly content?: string
+  /** Exact record id for replace/remove (precedence over oldText). */
+  readonly id?: string
+  /** Unique content substring for replace/remove. */
+  readonly oldText?: string
+  /** Tags for add / replacement tags for replace. */
+  readonly tags?: string[]
+  /** Scope this operation applies to (add only; batch is single-scope). */
+  readonly scope?: MemoryScope
+}
+
+/** Per-action tallies of an applied batch. */
+export interface BatchTally {
+  readonly added: number
+  readonly replaced: number
+  readonly removed: number
+  readonly skippedDuplicate: number
+  readonly skippedMissing: number
+  readonly skippedAmbiguous: number
+}
+
+/** Successful batch outcome. */
+export interface BatchOkResult {
+  readonly ok: true
+  readonly tally: BatchTally
+  readonly usage: number
+  readonly limit: number
+}
+
 /**
  * One scope's durable memory, backed by a single JSONL file. Writes run under
  * a cross-process lock and refuse to overwrite unreadable or drifted files;
@@ -72,6 +105,8 @@ export declare class MemoryStore {
   touch(id: string): Promise<TouchResult>
   /** Remove one record by id; resolves the write outcome. */
   delete(id: string): Promise<DeleteResult>
+  /** Apply a batch of mutations atomically; budget is checked against the final state. */
+  applyBatch(ops: BatchOperation[]): Promise<BatchOkResult | Extract<StoreWriteResult, { ok: false } & { tally: BatchTally }>>
   /** Run a BM25 query; returns ranked hits. */
   search(query: string, opts?: { limit?: number }): Promise<RankedHit[]>
 }

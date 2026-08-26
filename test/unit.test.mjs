@@ -248,7 +248,64 @@ try {
   assert.throws(() => parseExportBundle('{"version":99,"records":[]}'), /unsupported bundle version/)
   assert.throws(() => parseExportBundle('{"records":[]}'), /version/)
 
-  console.log('dsh-long-term-memory: all store + threats + export assertions passed')
+  // ── batch ─────────────────────────────────────────────────────────────────
+  const batchStore = new MemoryStore(join(dir, 'batch.jsonl'))
+  // Seed two records.
+  const a = await batchStore.put({ scope: 'global', content: 'alpha fact' })
+  const b = await batchStore.put({ scope: 'global', content: 'beta fact' })
+  assert.equal(a.ok && b.ok, true)
+
+  // Batch: replace alpha by oldText, add gamma, remove beta by id.
+  const batch1 = await batchStore.applyBatch([
+    { action: 'replace', oldText: 'alpha fact', content: 'alpha updated', tags: ['x'] },
+    { action: 'add', content: 'gamma fact' },
+    { action: 'remove', id: b.record.id },
+  ])
+  assert.equal(batch1.ok, true)
+  assert.equal(batch1.tally.replaced, 1)
+  assert.equal(batch1.tally.added, 1)
+  assert.equal(batch1.tally.removed, 1)
+  const afterBatch = await batchStore.list()
+  assert.equal(afterBatch.length, 2)
+  assert.ok(afterBatch.some((r) => r.content === 'alpha updated' && r.tags.includes('x')), 'replaced content+tags')
+  assert.ok(afterBatch.some((r) => r.content === 'gamma fact'), 'added record present')
+  assert.ok(!afterBatch.some((r) => r.content === 'beta fact'), 'removed record gone')
+
+  // Duplicate add is skipped, missing and ambiguous targets are counted.
+  const batch2 = await batchStore.applyBatch([
+    { action: 'add', content: 'gamma fact' },          // duplicate
+    { action: 'remove', oldText: 'does not exist' },   // missing
+    { action: 'replace', oldText: 'a', content: 'ambiguous!' }, // matches 2 ("alpha updated", "gamma fact")
+  ])
+  assert.equal(batch2.ok, true)
+  assert.equal(batch2.tally.skippedDuplicate, 1)
+  assert.equal(batch2.tally.skippedMissing, 1)
+  assert.equal(batch2.tally.skippedAmbiguous, 1)
+  assert.equal(batch2.tally.added + batch2.tally.replaced + batch2.tally.removed, 0, 'nothing changed')
+
+  // Budget checked against FINAL state: remove first, then add beyond the lone-add limit.
+  const tight = new MemoryStore(join(dir, 'tight.jsonl'), { charLimit: 30 })
+  await tight.put({ scope: 'global', content: 'this is a fairly long record' }) // 29 chars
+  const batch3 = await tight.applyBatch([
+    { action: 'remove', oldText: 'fairly long' },
+    { action: 'add', content: 'new short' }, // would exceed if added alone
+  ])
+  assert.equal(batch3.ok, true, 'remove-then-add fits the final budget')
+  assert.equal(batch3.tally.removed, 1)
+  assert.equal(batch3.tally.added, 1)
+
+  // Budget overflow with no room: the whole batch is refused (atomic).
+  const batch4 = await tight.applyBatch([
+    { action: 'add', content: 'another long record that pushes way over' },
+    { action: 'add', content: 'yet another long record' },
+  ])
+  assert.equal(batch4.ok, false)
+  assert.equal(batch4.reason, 'limit')
+  const afterRefusal = await tight.list()
+  assert.equal(afterRefusal.length, 1, 'refused batch left the store unchanged')
+  assert.equal(afterRefusal[0].content, 'new short', 'no partial application')
+
+  console.log('dsh-long-term-memory: all store + threats + export + batch assertions passed')
 } finally {
   await rm(dir, { recursive: true, force: true })
 }
