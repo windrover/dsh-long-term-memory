@@ -12,11 +12,14 @@ import { join } from 'node:path'
 
 import {
   MemoryStore,
+  EXPORT_VERSION,
   analyzeJsonl,
   buildIndex,
   deserialize,
   emptyRecord,
+  exportBundle,
   normalizeRecord,
+  parseExportBundle,
   rank,
   serialize,
   tokenize,
@@ -211,7 +214,41 @@ try {
   const round = serialize([normalized])
   assert.deepEqual(deserialize(round), [normalized])
 
-  console.log('dsh-long-term-memory: all store + threats assertions passed')
+  // ── export / import ────────────────────────────────────────────────────────
+  const expStore = new MemoryStore(join(dir, 'export.jsonl'))
+  await expStore.put({ scope: 'user', content: '用户喜欢美式咖啡', tags: ['preference'] })
+  await expStore.put({ scope: 'global', content: 'remember to rotate API keys', tags: ['security'] })
+  await expStore.put({ scope: 'global', content: 'short' })
+
+  // JSON export: versioned, only content/scope/tags travel, no provenance.
+  const json = exportBundle(await expStore.list(), 'json')
+  const parsed = JSON.parse(json)
+  assert.equal(parsed.version, EXPORT_VERSION)
+  assert.equal(parsed.records.length, 3)
+  for (const r of parsed.records) {
+    assert.ok(['user', 'global'].includes(r.scope))
+    assert.ok(typeof r.content === 'string' && r.content.length > 0)
+    assert.ok(Array.isArray(r.tags))
+    assert.equal(r.id, undefined, 'provenance fields dropped')
+    assert.equal(r.hits, undefined, 'hit counter dropped')
+  }
+
+  // parseExportBundle round-trips to normalized records.
+  const parsedRecords = parseExportBundle(json)
+  assert.equal(parsedRecords.length, 3)
+  assert.ok(parsedRecords.some((r) => r.content === '用户喜欢美式咖啡' && r.scope === 'user'))
+
+  // Markdown export: sections per scope, bullets per record.
+  const md = exportBundle(await expStore.list(), 'markdown')
+  assert.ok(md.includes('## user') && md.includes('## global'), 'markdown has scope sections')
+  assert.ok(md.includes('- 用户喜欢美式咖啡 [preference]'), 'markdown bullet with tags')
+
+  // Malformed / wrong-version bundles throw readable errors.
+  assert.throws(() => parseExportBundle('not json'), /not valid JSON/)
+  assert.throws(() => parseExportBundle('{"version":99,"records":[]}'), /unsupported bundle version/)
+  assert.throws(() => parseExportBundle('{"records":[]}'), /version/)
+
+  console.log('dsh-long-term-memory: all store + threats + export assertions passed')
 } finally {
   await rm(dir, { recursive: true, force: true })
 }

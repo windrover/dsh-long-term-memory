@@ -45,6 +45,14 @@ export interface JsonlAnalysis {
 /** Default per-store character budget. */
 export declare const DEFAULT_CHAR_LIMIT: number
 
+/** Current portable export bundle schema version. */
+export declare const EXPORT_VERSION: number
+
+/** Build a portable export bundle (JSON v1 or Markdown) for records. */
+export declare function exportBundle(records: readonly MemoryRecord[], format?: 'json' | 'markdown'): string
+/** Parse a v1 JSON export bundle into normalized records; throws on malformed input. */
+export declare function parseExportBundle(text: string): MemoryRecord[]
+
 /**
  * One scope's durable memory, backed by a single JSONL file. Writes run under
  * a cross-process lock and refuse to overwrite unreadable or drifted files;

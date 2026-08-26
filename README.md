@@ -28,6 +28,8 @@
 | `memory_recall(query, scope?, limit?)` | BM25 检索，返回带分数、id、scope 的命中。`scope: user/global/workspace/all`（默认 `all`，user 优先）。 |
 | `memory_list(scope?, limit?)` | 按更新时间列出近期记忆（无评分）。 |
 | `memory_forget(id, scope?)` | 按 id 删除记忆（不指定 scope 时按 user→global→workspace 顺序查）。 |
+| `memory_export(scope?, format?)` | 导出为可移植 bundle（JSON v1 可往返导入，或人类可读 Markdown）；只带 content/scope/tags。 |
+| `memory_import(bundle, scope?)` | 从 v1 JSON bundle 恢复记录；可按 content 去重跳过；可强制归入指定 scope。 |
 
 ## 存储
 
