@@ -133,17 +133,29 @@ dsh plugin --profile web add "file:$(pwd)"
   - `compressWithLLM: true`：先用 LLM 精炼整个 store（合并重叠、去陈旧），失败回退规则压缩。
   - 压缩只有真正腾出空间才落盘——无法压缩时报错且不误删旧条目。
 
-## 宿主 API（供未来 Web 记忆管理界面调用）
+## Web 图形界面
 
-web profile 下注册以下路由（JSON，供界面层使用）：
+插件带一个浏览器客户端（`dsh.client` bundle），提供两个界面：
+
+**记忆管理面板**（右侧详情栏，`details` 插槽）：列表（按作用域过滤）、BM25 搜索、**新增 / 编辑 / 删除记忆**、导出 JSON、粘贴导入——全部调用宿主 API，不经模型。
+
+**设置卡片**（`Settings → Plugins → long-term-memory`，`settings.plugin.item` 插槽）：基础开关——自动总结、LLM 压缩、上下文注入模式、写入审批、字符预算，保存即写入 `settings.yaml` 的 `long-term-memory:` 节（热重载）。
+
+> 其他插件复用同一模式即可获得图形设置入口：注册 settings namespace（宿主侧）+ 挂 `settings.plugin.item` 卡片（客户端侧，`key` 填 namespace）。
+
+## 宿主 API
+
+web profile 下注册以下路由（JSON，界面与命令共用）：
 
 | 路由 | 方法 | 说明 |
 |---|---|---|
 | `/api/memory/list?scope=` | GET | 列出各作用域记忆 |
 | `/api/memory/search?q=&scope=` | GET | BM25 检索 |
 | `/api/memory/get?id=` | GET | 单条记忆 |
+| `/api/memory/put` | POST | 新增/编辑（`{id?, scope, content, tags}`） |
 | `/api/memory/delete?id=` | GET | 删除单条 |
-| `/api/memory/settings` | GET | 当前开关状态（autoSummarize/compressWithLLM 等） |
+| `/api/memory/import` | POST | 导入 v1 JSON bundle |
+| `/api/memory/settings` | GET/POST | 读写开关（POST 更新 `settings.yaml`） |
 
 ## 测试
 
@@ -160,8 +172,9 @@ node test/unit.test.mjs
 - `lib/automation.js` — 自动总结/压缩的纯逻辑：回合文本提取、LLM JSON 解析、规则压缩器。
 - `lib/llm.js` — 一发一收的辅助 LLM 调用封装（继承 agent 的 provider/model）。
 - `lib/index.js` — 插件主体：注册工具、三档动态上下文注入、自动总结钩子、压缩接入、设置 namespace、宿主 API。
+- `lib/client.js` — 浏览器 bundle：记忆管理面板（details 栏）+ 设置卡片（settings.plugin.item）。
 - `cordis.patch.yml` — bundle patch（插入一行 `long-term-memory`）。
-- `package.json` — bundle manifest（`dsh.bundle.patch`）。
+- `package.json` — bundle manifest（`dsh.bundle.patch` + `dsh.client`）。
 - `lib/types/` — `index.d.ts`（插件）+ `store.d.ts`（store 模块）类型声明。
 - `test/unit.test.mjs` — 单元测试。
 

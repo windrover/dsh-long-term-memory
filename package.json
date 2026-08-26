@@ -14,12 +14,16 @@
       "types": "./lib/types/store.d.ts",
       "default": "./lib/store.js"
     },
+    "./client": {
+      "default": "./lib/client.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
     "lib/store.js",
+    "lib/client.js",
     "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "README.md"
@@ -40,6 +44,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ],
+      "platform": "web"
     }
   }
 }
