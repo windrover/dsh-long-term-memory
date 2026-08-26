@@ -331,3 +331,56 @@ async function writeAppend(path, line) {
   const existing = await readFile(path, 'utf8')
   await writeFile(path, existing + line, 'utf8')
 }
+
+// ── automation（自动总结/压缩的纯逻辑）────────────────────────────────────
+import { newUserText, parseFacts, compressRules, similarity } from '../lib/automation.js'
+
+// newUserText：只取 sinceSeq 之后的新用户消息文本
+{
+  const events = [
+    { type: 'user/message', seq: 0, data: { message: { content: [{ type: 'text', text: 'old' }] } } },
+    { type: 'assistant/message', seq: 1, data: { message: { content: [{ type: 'text', text: 'skip me' }] } } },
+    { type: 'user/message', seq: 2, data: { message: { content: [{ type: 'text', text: 'new fact' }] } } },
+    { type: 'user/message', seq: 3, data: { message: { content: [{ type: 'text', text: 'another' }] } } },
+  ]
+  assert.equal(newUserText(events, -1), 'old\nnew fact\nanother')
+  assert.equal(newUserText(events, 1), 'new fact\nanother')
+  assert.equal(newUserText(events, 3), '')
+}
+
+// parseFacts：容忍 JSON 周围有散文/代码围栏
+{
+  const facts = parseFacts('Here you go:\n```json\n[{"scope":"user","content":"喜欢咖啡","tags":["preference"]},{"scope":"global","content":"rotate keys"}]\n```')
+  assert.equal(facts.length, 2)
+  assert.equal(facts[0].scope, 'user')
+  assert.equal(facts[0].content, '喜欢咖啡')
+  assert.equal(facts[1].scope, 'global')
+  assert.deepEqual(parseFacts('nothing to remember'), [])
+  assert.equal(parseFacts('[{"scope":"bogus","content":"x"}]')[0].scope, 'global', '非法 scope 回退 global')
+  assert.deepEqual(parseFacts('[{"content":"  "}]'), [], '空 content 被丢弃')
+}
+
+// compressRules：先丢最冷（hits 低、旧），子串重复的也合并
+{
+  const now = Date.now()
+  const records = [
+    { id: 'cold', content: 'cold old fact', hits: 0, updatedAt: now - 1000 },
+    { id: 'warm', content: 'warm fact', hits: 3, updatedAt: now },
+    { id: 'dup', content: 'fact', hits: 5, updatedAt: now }, // warm 的子串
+  ]
+  const { kept, dropped } = compressRules(records, 12) // 预算小
+  assert.ok(dropped.length >= 1, '至少丢一条')
+  assert.ok(!kept.some((r) => r.id === 'cold'), '最冷的先被丢')
+  // 预算足够时全保留
+  const full = compressRules(records, 1000)
+  assert.equal(full.kept.length, 3)
+  assert.equal(full.dropped.length, 0)
+}
+
+// similarity：Jaccard 相似度
+{
+  assert.ok(similarity({ content: '喜欢美式咖啡' }, { content: '喜欢拿铁咖啡' }) > 0)
+  assert.equal(similarity({ content: 'a b c' }, { content: 'x y z' }), 0)
+}
+
+console.log('dsh-long-term-memory: automation assertions passed')
