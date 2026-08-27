@@ -1,6 +1,6 @@
 {
   "name": "dsh-long-term-memory",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Layered deterministic long-term memory for DeepSeek Harness: CJK-aware BM25 recall, JSONL storage, per-assembly context injection, and an optional write-approval gate.",
   "type": "module",
   "main": "lib/index.js",
