@@ -211,5 +211,5 @@ node test/unit.test.mjs
 - [x] Web 管理界面（记忆面板 + 设置卡片）
 - [x] 多标签右侧栏容器（details-tabs：记忆/产物/官方详情面板自动镜像，v2 并列布局）
 - [x] 校准注入框架 + 纠正回路（memory_correct / superseded）
-- [ ] 记忆导出到云盘/剪贴板格式选择
+- [x] ~~记忆导出到云盘/剪贴板格式选择~~（已决定不做）
 - [x] 标签过滤注入（recent 模式按 tag 过滤，injectTags 热重载）
