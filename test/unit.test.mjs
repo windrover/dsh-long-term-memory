@@ -333,7 +333,7 @@ async function writeAppend(path, line) {
 }
 
 // ── automation（自动总结/压缩的纯逻辑）────────────────────────────────────
-import { newUserText, parseFacts, compressRules, similarity, buildInjectionBlock } from '../lib/automation.js'
+import { newUserText, parseFacts, compressRules, similarity, buildInjectionBlock, filterByTags } from '../lib/automation.js'
 
 // newUserText：只取 sinceSeq 之后的新用户消息文本
 {
@@ -381,6 +381,29 @@ import { newUserText, parseFacts, compressRules, similarity, buildInjectionBlock
 {
   assert.ok(similarity({ content: '喜欢美式咖啡' }, { content: '喜欢拿铁咖啡' }) > 0)
   assert.equal(similarity({ content: 'a b c' }, { content: 'x y z' }), 0)
+}
+
+
+// ── filterByTags（注入标签过滤）────────────────────────────────────────────
+{
+  const records = [
+    { id: 'a', content: 'decision: use pnpm', tags: ['decision', 'project'] },
+    { id: 'b', content: 'user likes dark mode', tags: ['preference'] },
+    { id: 'c', content: 'untagged note', tags: [] },
+    { id: 'd', content: 'no tags field', tags: undefined },
+  ]
+  // empty filter = no-op (inject everything)
+  assert.equal(filterByTags(records, []), records, 'empty tags → same ref')
+  assert.equal(filterByTags(records, undefined), records, 'undefined tags → same ref')
+  // single tag
+  const only = filterByTags(records, ['decision'])
+  assert.deepEqual(only.map((r) => r.id), ['a'], 'keeps only tagged entries')
+  // any-of semantics
+  const any = filterByTags(records, ['decision', 'preference'])
+  assert.deepEqual(any.map((r) => r.id).sort(), ['a', 'b'], 'any matching tag keeps the record')
+  // non-array tags on a record are skipped (never throws)
+  const junk = [{ id: 'x', content: 'y', tags: 'not-array' }]
+  assert.deepEqual(filterByTags(junk, ['y']), [], 'non-array tags treated as absent')
 }
 
 console.log('dsh-long-term-memory: automation assertions passed')

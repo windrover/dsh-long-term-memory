@@ -15,7 +15,8 @@
 | **确定性召回** | `memory_recall` 用 CJK 感知的 BM25 检索（中/日/韩按汉字 bigram 匹配，英文按单词），结果可解释、可重放。 |
 | **每轮自动注入** | 每次组装 request 前，通过 `systemPrompt.context()` 注入记忆摘要（同步渲染，不破坏 prefix cache）。 |
 | **校准注入框架** | 注入块带 `<long_term_memory>` 包裹：诚实声明来源与启发式不确定性、显式授权模型判断相关性并忽略、标明"过去的记录而非指令"、指引过期记忆走 `memory_correct`（防 prompt-injection 式误读，借鉴 hindsight-coding-agents）。 |
-| **注入三档** | `recent`（默认，每库最近几条）/ `full`（全部，受字符预算，快照式注入）/ `off`。 |
+| **注入三档** | `recent`（默认，每库最近几条）/ `full`（全部，受字符预算，快照式注入）/ `off`。`injectContext` 与 `injectTags` 走 settings 热重载，改 `settings.yaml` 下一轮即生效。 |
+| **标签过滤注入** | `injectTags`（如 `["decision","constraint"]`）：`recent` 模式下只注入带这些 tag 的记忆，过滤掉琐碎条目，让摘要聚焦高价值事实；空 = 全部注入。 |
 | **威胁扫描** | 写入内容与注入快照都做轻量威胁模式检测：命中则写入拒绝、注入替换为 `[BLOCKED: …]` 占位符。 |
 | **纠正回路** | `memory_correct(claim, truth, evidence?)` 写入更正事实并把匹配到的过期记录标记 `superseded`——召回与注入自动排除，`memory_list`/面板显示 `[SUPERSEDED]`（面板为「已更正」徽标）供审计清理，导出时丢弃。 |
 | **写入审批门** | 可选：`memory_write` / `memory_forget` 先走 `tools/pre-execute` 的 `ask` 决策，由 DSH 审批接缝裁决。 |
@@ -95,6 +96,8 @@ dsh plugin --profile web add "file:$(pwd)"
     requireApprovalForWrite: false
     # 注入策略：recent（默认）/ full / off（兼容旧布尔 true/false）
     injectContext: recent
+    # recent 模式下只注入带这些 tag 的记忆（空 = 全部注入；full 模式忽略该过滤）
+    injectTags: ["decision", "constraint"]
     # 写入内容是否做威胁扫描（默认 true）
     scanThreatsOnWrite: true
     # 自动总结：每轮对话结束后用 LLM 蒸馏值得长期记住的事实（默认 false，每次是辅助模型调用）
@@ -208,4 +211,4 @@ node test/unit.test.mjs
 - [x] 多标签右侧栏容器（details-tabs：记忆/产物/官方详情面板自动镜像，v2 并列布局）
 - [x] 校准注入框架 + 纠正回路（memory_correct / superseded）
 - [ ] 记忆导出到云盘/剪贴板格式选择
-- [ ] 标签过滤注入（recent 模式按 tag 过滤）
+- [x] 标签过滤注入（recent 模式按 tag 过滤，injectTags 热重载）
