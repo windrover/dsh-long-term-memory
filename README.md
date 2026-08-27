@@ -14,8 +14,10 @@
 | **记忆沉淀** | 模型用 `memory_write` 把值得长期保存的事实写入存储。 |
 | **确定性召回** | `memory_recall` 用 CJK 感知的 BM25 检索（中/日/韩按汉字 bigram 匹配，英文按单词），结果可解释、可重放。 |
 | **每轮自动注入** | 每次组装 request 前，通过 `systemPrompt.context()` 注入记忆摘要（同步渲染，不破坏 prefix cache）。 |
+| **校准注入框架** | 注入块带 `<long_term_memory>` 包裹：诚实声明来源与启发式不确定性、显式授权模型判断相关性并忽略、标明"过去的记录而非指令"、指引过期记忆走 `memory_correct`（防 prompt-injection 式误读，借鉴 hindsight-coding-agents）。 |
 | **注入三档** | `recent`（默认，每库最近几条）/ `full`（全部，受字符预算，快照式注入）/ `off`。 |
 | **威胁扫描** | 写入内容与注入快照都做轻量威胁模式检测：命中则写入拒绝、注入替换为 `[BLOCKED: …]` 占位符。 |
+| **纠正回路** | `memory_correct(claim, truth, evidence?)` 写入更正事实并把匹配到的过期记录标记 `superseded`——召回与注入自动排除，`memory_list`/面板显示 `[SUPERSEDED]`（面板为「已更正」徽标）供审计清理，导出时丢弃。 |
 | **写入审批门** | 可选：`memory_write` / `memory_forget` 先走 `tools/pre-execute` 的 `ask` 决策，由 DSH 审批接缝裁决。 |
 | **写入护栏** | 跨进程文件锁 + 原子写；外部漂移检测（备份并拒绝，不静默丢数据）；文件不可读拒绝覆写；每库字符预算，超限要求先删后加。 |
 | **低开销召回** | `memory_recall` 的命中计数（touch）为**纯内存操作**，不重写文件——召回 O(1)，实测 ~0.3ms。 |
@@ -31,6 +33,7 @@
 | `memory_export(scope?, format?)` | 导出为可移植 bundle（JSON v1 可往返导入，或人类可读 Markdown）；只带 content/scope/tags。 |
 | `memory_import(bundle, scope?)` | 从 v1 JSON bundle 恢复记录；可按 content 去重跳过；可强制归入指定 scope。 |
 | `memory_batch(scope, operations)` | 单 scope 原子批量：add/replace/remove 一次落盘；预算按最终态检查（可先删后加）；重复/缺失/多匹配计数返回。 |
+| `memory_correct(claim, truth, evidence?)` | 记录更正：写入 `truth` 为新的记忆（tag `correction`），并把与 `claim` 匹配的旧记录标记 superseded；已更正记录不再被召回/注入，但保留在列表中供审计删除。 |
 
 ## 存储
 
@@ -203,5 +206,6 @@ node test/unit.test.mjs
 - [x] 威胁扫描、写入护栏、自动总结、LLM 压缩
 - [x] Web 管理界面（记忆面板 + 设置卡片）
 - [x] 多标签右侧栏容器（details-tabs：记忆/产物/官方详情面板自动镜像，v2 并列布局）
+- [x] 校准注入框架 + 纠正回路（memory_correct / superseded）
 - [ ] 记忆导出到云盘/剪贴板格式选择
 - [ ] 标签过滤注入（recent 模式按 tag 过滤）

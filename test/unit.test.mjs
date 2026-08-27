@@ -333,7 +333,7 @@ async function writeAppend(path, line) {
 }
 
 // ── automation（自动总结/压缩的纯逻辑）────────────────────────────────────
-import { newUserText, parseFacts, compressRules, similarity } from '../lib/automation.js'
+import { newUserText, parseFacts, compressRules, similarity, buildInjectionBlock } from '../lib/automation.js'
 
 // newUserText：只取 sinceSeq 之后的新用户消息文本
 {
@@ -384,3 +384,61 @@ import { newUserText, parseFacts, compressRules, similarity } from '../lib/autom
 }
 
 console.log('dsh-long-term-memory: automation assertions passed')
+
+// ── correction loop（supersede + 召回排除 + 导出过滤）───────────────────────
+{
+  const dir = await mkdtemp(join(tmpdir(), 'ltm-correct-'))
+  try {
+    const store = new MemoryStore(join(dir, 'correct.jsonl'))
+    const stale = await store.put({ scope: 'global', content: 'the build uses pnpm 9' })
+    const other = await store.put({ scope: 'global', content: 'API keys live in .env' })
+    assert.ok(stale.ok && other.ok)
+
+    // search() finds the stale record before correction.
+    const before = await store.search('pnpm')
+    assert.ok(before.some((h) => h.record.id === stale.record.id))
+
+    // supersede marks it; the correction record supersedes it.
+    const { marked } = await store.supersede([stale.record.id], 'corr-1')
+    assert.deepEqual(marked, [stale.record.id])
+    const second = await store.supersede([stale.record.id], 'corr-2')
+    assert.deepEqual(second.marked, [], 'already-superseded ids are skipped')
+
+    // search() excludes superseded records.
+    const after = await store.search('pnpm')
+    assert.equal(after.some((h) => h.record.id === stale.record.id), false, 'superseded excluded from recall')
+    const untouched = await store.search('.env')
+    assert.ok(untouched.some((h) => h.record.id === other.record.id), 'live records still recall')
+
+    // list() still shows the stale record for audit (raw admin view).
+    const all = await store.list()
+    assert.ok(all.some((r) => r.id === stale.record.id && r.superseded === true && r.supersededBy === 'corr-1'))
+
+    // exportBundle drops superseded records.
+    const bundle = JSON.parse(exportBundle(await store.list(), 'json'))
+    assert.equal(bundle.records.some((r) => r.content.includes('pnpm 9')), false, 'superseded not exported')
+    assert.ok(bundle.records.some((r) => r.content.includes('.env')), 'live records exported')
+
+    // normalizeRecord round-trips the new fields.
+    const normalized = normalizeRecord({ ...emptyRecord('global'), content: 'x', superseded: true, supersededBy: 'c1' }, 'global')
+    assert.equal(normalized.superseded, true)
+    assert.equal(normalized.supersededBy, 'c1')
+    const round = deserialize(serialize([normalized]))
+    assert.equal(round[0].superseded, true)
+    assert.equal(round[0].supersededBy, 'c1')
+    assert.equal(normalizeRecord({ content: 'y', superseded: 'yes' }, 'global').superseded, false, 'non-boolean ignored')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+// ── injection framing（buildInjectionBlock）─────────────────────────────────
+{
+  const block = buildInjectionBlock('User profile memory:\n- fact')
+  assert.ok(block.startsWith('<long_term_memory>'), 'opens with the tag')
+  assert.ok(block.endsWith('</long_term_memory>'), 'closes with the tag')
+  assert.ok(block.includes('retrieval is heuristic'), 'admits fallibility')
+  assert.ok(block.includes('record of the PAST'), 'marks content as history, not instructions')
+  assert.ok(block.includes('memory_correct'), 'routes stale facts to the correction tool')
+  assert.ok(block.includes('User profile memory:\n- fact'), 'digest body preserved verbatim')
+}
