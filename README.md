@@ -37,6 +37,7 @@
 | `memory_import(bundle, scope?)` | 从 v1 JSON bundle 恢复记录；可按 content 去重跳过；可强制归入指定 scope。 |
 | `memory_batch(scope, operations)` | 单 scope 原子批量：add/replace/remove 一次落盘；预算按最终态检查（可先删后加）；重复/缺失/多匹配计数返回。 |
 | `memory_correct(claim, truth, evidence?)` | 记录更正：写入 `truth` 为新的记忆（tag `correction`），并把与 `claim` 匹配的旧记录标记 superseded；已更正记录不再被召回/注入，但保留在列表中供审计删除。 |
+| `memory_diagnose()` | 诊断报告（无副作用）：实际生效的 settings（injectContext/injectTags/autoSummarize/…）、注入是否启用、各库 live/total 条数与字符占用、superseded 数、存储文件路径；不泄露机密。记忆「没生效」时先用它定位。 |
 
 ## 存储
 
